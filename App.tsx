@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ShieldCheck, TrendingUp, Users, Menu, X, ArrowLeft, Copy, AlertTriangle, Globe, Fingerprint, Receipt, Zap, Landmark, Smartphone, MessageCircle, ChevronRight, Info, ChevronDown, Gift } from 'lucide-react';
+import { Search, ShieldCheck, TrendingUp, Users, Menu, X, ArrowLeft, Copy, AlertTriangle, Globe, Fingerprint, Receipt, Zap, Landmark, Smartphone, MessageCircle, ChevronRight, Info, ChevronDown, Gift, Share2, Mail, Twitter, Facebook, Linkedin, Send, MessageSquare, Instagram, Youtube, Github, ExternalLink, BookOpen } from 'lucide-react';
 import Logo from './components/Logo';
 import PriceChart from './components/PriceChart';
-import AIAssistant from './components/AIAssistant';
 import { MOCK_MERCHANTS, TRADING_OPTIONS, SUPPORTED_BANKS } from './constants';
 import { Listing, MarketStat } from './types';
 
@@ -26,15 +25,51 @@ export const App: React.FC = () => {
 
   // Trade State
   const [wldAmount, setWldAmount] = useState<string>('');
-  const [accountNumber, setAccountNumber] = useState<string>('');
+  const [accountNumber, setAccountNumber] = useState<string>(''); // Used for Bank Account, Phone/Till, or LNURL
   const [selectedNetwork, setSelectedNetwork] = useState<string>('');
 
   // Market Data State
   const [chartData, setChartData] = useState<MarketStat[]>([]);
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
+  const [currentPrice, setCurrentPrice] = useState<number>(0); // USD for Chart
+  const [wldPriceKES, setWldPriceKES] = useState<number>(0); // KES for Trading
   const [priceChange, setPriceChange] = useState<number>(0);
   const [chartRange, setChartRange] = useState<string>('1D');
   const [isChartLoading, setIsChartLoading] = useState(false);
+
+  // Referral System State
+  const [activeReferrer, setActiveReferrer] = useState<string | null>(null);
+  const [referralId, setReferralId] = useState<string>(''); // User's custom handle for sharing
+
+  // Initialize Referral Tracking from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      setActiveReferrer(ref);
+      sessionStorage.setItem('wekewa_referrer', ref);
+    } else {
+      const saved = sessionStorage.getItem('wekewa_referrer');
+      if (saved) setActiveReferrer(saved);
+    }
+  }, []);
+
+  // Scroll detection to close mobile menu
+  useEffect(() => {
+    const handleScroll = () => {
+      if (isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    if (isMobileMenuOpen) {
+      // Use passive listener for better performance
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [isMobileMenuOpen]);
 
   // Navigation Helper
   const navigateTo = (view: View) => {
@@ -47,7 +82,7 @@ export const App: React.FC = () => {
   const generateMockData = (range: string) => {
     const points = 50;
     const data: MarketStat[] = [];
-    let price = 4.80; // Start price
+    let price = 4.80; // Start price USD
     const now = new Date();
     
     for (let i = 0; i < points; i++) {
@@ -81,8 +116,8 @@ export const App: React.FC = () => {
   const fetchMarketData = async (range: string) => {
     setIsChartLoading(true);
     try {
-        // Fetch current price first
-        const priceRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=worldcoin-wld&vs_currencies=usd&include_24hr_change=true', {
+        // Fetch current price (USD & KES)
+        const priceRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=worldcoin-wld&vs_currencies=usd,kes&include_24hr_change=true', {
             headers: { 'Accept': 'application/json' }
         });
         
@@ -91,6 +126,7 @@ export const App: React.FC = () => {
         
         if (priceJson['worldcoin-wld']) {
            setCurrentPrice(priceJson['worldcoin-wld'].usd);
+           setWldPriceKES(priceJson['worldcoin-wld'].kes);
            // Default to 24h change initially
            setPriceChange(priceJson['worldcoin-wld'].usd_24h_change); 
         }
@@ -156,6 +192,8 @@ export const App: React.FC = () => {
         if (fallbackData.length > 0) {
             const lastPrice = fallbackData[fallbackData.length - 1].price;
             setCurrentPrice(lastPrice);
+            // Fallback KES approximate
+            setWldPriceKES(lastPrice * 129); 
             const startPrice = fallbackData[0].price;
             setPriceChange(((lastPrice - startPrice) / startPrice) * 100);
         }
@@ -172,6 +210,12 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [chartRange]);
 
+  // Dynamic Price Calculation
+  // Platform Fee is 3%, so we offer 97% of the market price
+  const getOfferPrice = () => {
+     if (wldPriceKES > 0) return wldPriceKES * 0.97;
+     return 0;
+  };
 
   const handleTradeClick = (listing: Listing) => {
     // Intercept Bank Transfer to show modal
@@ -180,7 +224,14 @@ export const App: React.FC = () => {
       return;
     }
     
-    setSelectedListing(listing);
+    const offerPrice = getOfferPrice();
+    // Create a copy with the live calculated price
+    const dynamicListing = { 
+        ...listing, 
+        price: offerPrice > 0 ? parseFloat(offerPrice.toFixed(2)) : listing.price 
+    };
+
+    setSelectedListing(dynamicListing);
     setWldAmount(''); // Reset amount
     setAccountNumber('');
     setSelectedNetwork('');
@@ -191,10 +242,12 @@ export const App: React.FC = () => {
     // Find the base bank listing
     const baseListing = TRADING_OPTIONS.find(o => o.id === 'opt_bank');
     if (baseListing) {
-      // Create a copy with the specific bank name as the payment method
+      const offerPrice = getOfferPrice();
+      // Create a copy with the specific bank name and live price
       const bankListing = { 
         ...baseListing, 
-        paymentMethods: [bankName] // Store specific bank name here
+        paymentMethods: [bankName],
+        price: offerPrice > 0 ? parseFloat(offerPrice.toFixed(2)) : baseListing.price 
       };
       setSelectedListing(bankListing);
       setWldAmount('');
@@ -219,8 +272,8 @@ export const App: React.FC = () => {
     bank.toLowerCase().includes(bankSearch.toLowerCase())
   );
 
-  // Fee Calculation Logic
-  const getBankFee = (amount: number) => {
+  // Standard Transaction Fee Calculation (Used for both Bank and M-Pesa)
+  const getTransactionFee = (amount: number) => {
     if (amount >= 0 && amount <= 99) return 0;
     if (amount >= 100 && amount <= 999) return 13;
     if (amount >= 1000 && amount <= 9999) return 90;
@@ -229,27 +282,33 @@ export const App: React.FC = () => {
     return 0;
   };
 
+  // Calculate Totals Logic
   const calculateTotals = () => {
     if (!selectedListing || !wldAmount) return { gross: 0, fee: 0, net: 0 };
     
     const amount = parseFloat(wldAmount);
     if (isNaN(amount)) return { gross: 0, fee: 0, net: 0 };
 
+    // 'selectedListing.price' is already (Market Price - 3%)
     const gross = amount * selectedListing.price;
-    let fee = 0;
+    let paymentMethodFee = 0;
 
-    // Apply specific bank fees if it's a bank transfer
-    // We check if the payment method is one of the supported banks OR 'Bank Transfer'
-    const isBankTransfer = selectedListing.id === 'opt_bank' || (selectedListing.paymentMethods.length > 0 && SUPPORTED_BANKS.includes(selectedListing.paymentMethods[0]));
-    
-    if (isBankTransfer) {
-      fee = getBankFee(gross);
+    // Apply specific fees if it's a bank transfer OR M-Pesa
+    const isBank = selectedListing.id === 'opt_bank' || (selectedListing.paymentMethods.length > 0 && SUPPORTED_BANKS.includes(selectedListing.paymentMethods[0]));
+    const isMpesa = selectedListing.id === 'opt_mpesa';
+
+    if (isBank || isMpesa) {
+      paymentMethodFee = getTransactionFee(gross);
     }
+    
+    // Note: 3% platform fee is already deducted from the unit price (Gross amount is Net of platform fee)
+    // We only subtract the payment method transaction fee here to get final Net
+    const net = gross - paymentMethodFee;
 
     return {
       gross,
-      fee,
-      net: gross - fee
+      fee: paymentMethodFee,
+      net: Math.max(0, net)
     };
   };
 
@@ -267,7 +326,7 @@ export const App: React.FC = () => {
     const paymentMethod = selectedListing.paymentMethods[0];
 
     // Format the message
-    const message = `Hi, Wekewa please process my order...
+    let message = `Hi, Wekewa please process my order...
 Order: #${orderNumber}
 Selling: ${wldAmount} WLD
 Network: ${selectedNetwork}
@@ -275,9 +334,14 @@ Merchant Address: ${merchantAddress}
 Time: ${dayTime}
 Payment method: ${paymentMethod}
 Amount to be paid: ${net.toFixed(2)} KES
-Account number/Details: ${accountNumber || 'N/A'}
+Account number/Details: ${accountNumber || 'N/A'}`;
 
-Should we proceed?`;
+    // Append Referrer if exists
+    if (activeReferrer) {
+      message += `\nReferred By: ${activeReferrer}`;
+    }
+
+    message += `\n\nShould we proceed?`;
 
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/254799830656?text=${encodedMessage}`;
@@ -285,11 +349,85 @@ Should we proceed?`;
     window.open(whatsappUrl, '_blank');
   };
 
+  // Mock Email Service
+  const mockSendEmail = async (subject: string, body: string) => {
+    // In a production app, this would use fetch() to a backend API
+    console.group("📧 EMAIL SIMULATION (To: wekewa.com@gmail.com)");
+    console.log(`Subject: ${subject}`);
+    console.log(`Body: ${body}`);
+    console.log("Timestamp:", new Date().toISOString());
+    console.groupEnd();
+    return true;
+  };
+
+  const handleSocialShare = async (platform: string) => {
+    const handle = referralId.trim() || 'anonymous';
+    const link = `https://wekewa.vercel.app/?ref=${handle}`;
+    const text = `Trade Worldcoin securely on Wekewa! ${link} #wekewa`;
+    const encodedText = encodeURIComponent(text);
+    const encodedLink = encodeURIComponent(link);
+    const encodedTag = encodeURIComponent("#wekewa");
+
+    // Notify Admin of Share
+    const emailBody = `
+User Activity Alert:
+User ID: ${handle}
+Action: Shared on ${platform}
+Link: ${link}
+Time: ${new Date().toLocaleString()}
+    `;
+    mockSendEmail(`User ${handle} shared on ${platform}`, emailBody);
+
+    let url = '';
+
+    switch(platform) {
+        case 'whatsapp':
+            url = `https://wa.me/?text=${encodedText}`;
+            break;
+        case 'twitter':
+            url = `https://twitter.com/intent/tweet?text=${encodeURIComponent("Trade Worldcoin securely on Wekewa! #wekewa")}&url=${encodedLink}`;
+            break;
+        case 'facebook':
+            url = `https://www.facebook.com/sharer/sharer.php?u=${encodedLink}&hashtag=${encodedTag}`;
+            break;
+        case 'telegram':
+            url = `https://t.me/share/url?url=${encodedLink}&text=${encodeURIComponent("Trade Worldcoin securely on Wekewa! #wekewa")}`;
+            break;
+        case 'linkedin':
+            url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedLink}`;
+            break;
+        case 'reddit':
+            url = `https://www.reddit.com/submit?url=${encodedLink}&title=${encodeURIComponent("Wekewa - Worldcoin P2P Exchange #wekewa")}`;
+            break;
+        case 'email':
+            url = `mailto:?subject=Check out Wekewa&body=${encodedText}`;
+            break;
+        case 'sms':
+            url = `sms:?body=${encodedText}`;
+            break;
+        case 'copy':
+            try {
+                await navigator.clipboard.writeText(link);
+                alert('Link copied to clipboard!');
+            } catch (err) {
+                console.error('Failed to copy', err);
+            }
+            return; // Don't open window for copy
+    }
+
+    if (url) {
+        window.open(url, '_blank');
+    }
+  };
+
   const isSellMode = selectedListing?.type === 'buy'; // If merchant buys, user sells
   const isBank = selectedListing?.id === 'opt_bank' || (selectedListing?.paymentMethods[0] && SUPPORTED_BANKS.includes(selectedListing.paymentMethods[0]));
+  const isMpesa = selectedListing?.id === 'opt_mpesa';
+  const isBTC = selectedListing?.id === 'opt_btc';
   
   // Get current merchant profile logic
   const currentMerchant = selectedListing ? MOCK_MERCHANTS.find(m => m.name === selectedListing.user.name) : null;
+  const currentOfferPrice = getOfferPrice();
 
   return (
     <div className="min-h-screen bg-white text-wekewa-black font-sans selection:bg-black selection:text-white">
@@ -331,10 +469,10 @@ Should we proceed?`;
                <button className="text-sm font-medium text-gray-600 hover:text-black">Log in</button>
                <button 
                  onClick={() => navigateTo(View.REFERRALS)}
-                 className="bg-black text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-all hover:scale-105 flex items-center gap-2"
+                 className={`px-5 py-2 rounded-full text-sm font-medium transition-all hover:scale-105 flex items-center gap-2 ${currentView === View.REFERRALS ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-black text-white hover:bg-gray-800'}`}
                >
                  <Gift size={16} />
-                 Refer & Earn
+                 Share & Earn
                </button>
             </div>
 
@@ -347,9 +485,9 @@ Should we proceed?`;
           </div>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Menu - Pushes content down */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-16 left-0 w-full bg-white border-b border-gray-100 p-4 shadow-xl flex flex-col space-y-4 z-50">
+          <div className="md:hidden w-full bg-white border-t border-gray-100 p-4 flex flex-col space-y-4">
              <button onClick={() => navigateTo(View.HOME)} className="text-left font-medium p-2 hover:bg-gray-50 rounded">Overview</button>
              <button onClick={() => navigateTo(View.MERCHANTS)} className="text-left font-medium p-2 hover:bg-gray-50 rounded">Merchants</button>
              <button onClick={() => navigateTo(View.BECOME_MERCHANT)} className="text-left font-medium p-2 hover:bg-gray-50 rounded">Become a Merchant</button>
@@ -359,7 +497,7 @@ Should we proceed?`;
                className="w-full bg-black text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2"
              >
                <Gift size={18} />
-               Refer & Earn
+               Share & Earn
              </button>
           </div>
         )}
@@ -392,9 +530,6 @@ Should we proceed?`;
                   >
                     Start Trading
                   </button>
-                  <button className="px-8 py-3 sm:py-4 bg-white border border-gray-200 text-black rounded-full font-semibold text-base sm:text-lg hover:bg-gray-50 transition-colors">
-                    How it Works
-                  </button>
                 </div>
               </div>
               <div className="relative">
@@ -409,22 +544,6 @@ Should we proceed?`;
                       onRangeChange={setChartRange}
                       isLoading={isChartLoading}
                     />
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                       <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
-                          <div className="p-2 bg-green-50 rounded-lg text-green-600"><ShieldCheck size={20} className="sm:w-6 sm:h-6"/></div>
-                          <div>
-                            <p className="text-xs text-gray-500 font-medium uppercase">Security</p>
-                            <p className="font-bold text-sm sm:text-base">Escrow Protected</p>
-                          </div>
-                       </div>
-                       <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
-                          <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Users size={20} className="sm:w-6 sm:h-6"/></div>
-                          <div>
-                            <p className="text-xs text-gray-500 font-medium uppercase">Community</p>
-                            <p className="font-bold text-sm sm:text-base">20k+ Traders</p>
-                          </div>
-                       </div>
-                    </div>
                  </div>
               </div>
             </section>
@@ -551,8 +670,21 @@ Should we proceed?`;
                {/* Payment Methods / Trading Options */}
                <div className="flex flex-col h-full">
                   <div className="bg-gray-900 text-white p-6 sm:p-8 rounded-2xl mb-8 flex-1">
-                      <h3 className="text-xl sm:text-2xl font-bold mb-4">Start Trading</h3>
-                      <p className="text-gray-400 mb-8 text-sm sm:text-base">Select your preferred payment method to initiate a trade with Wekewa Official.</p>
+                      <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="text-xl sm:text-2xl font-bold">Start Trading</h3>
+                            <p className="text-gray-400 text-sm sm:text-base mt-1">Live market prices minus fees.</p>
+                          </div>
+                          <div className="text-right">
+                             <div className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-1">Live Price (KES)</div>
+                             {currentOfferPrice > 0 ? (
+                                <div className="text-green-400 font-bold font-mono text-lg animate-pulse">{currentOfferPrice.toFixed(2)}</div>
+                             ) : (
+                                <div className="text-gray-600 text-sm">Loading...</div>
+                             )}
+                          </div>
+                      </div>
+                      <p className="text-gray-400 mb-8 text-sm sm:text-base">Select your preferred payment method to initiate a trade.</p>
                       
                       <div className="space-y-4">
                          {/* BTC */}
@@ -565,7 +697,9 @@ Should we proceed?`;
                                      <p className="text-xs text-gray-400">Instant & Free</p>
                                   </div>
                                </div>
-                               <button className="px-3 sm:px-4 py-2 bg-white text-black text-xs sm:text-sm font-bold rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">Trade</button>
+                               <button className="px-3 sm:px-4 py-2 bg-white text-black text-xs sm:text-sm font-bold rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                  {currentOfferPrice > 0 ? `${currentOfferPrice.toFixed(2)} KES` : 'Loading...'}
+                               </button>
                             </div>
                             <div className="flex justify-between text-xs sm:text-sm border-t border-gray-700 pt-3">
                                <span className="text-gray-400">Fees: <span className="text-green-400 font-bold">Free</span></span>
@@ -583,7 +717,9 @@ Should we proceed?`;
                                      <p className="text-xs text-gray-400">Mobile Money</p>
                                   </div>
                                </div>
-                               <button className="px-3 sm:px-4 py-2 bg-white text-black text-xs sm:text-sm font-bold rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">Trade</button>
+                               <button className="px-3 sm:px-4 py-2 bg-white text-black text-xs sm:text-sm font-bold rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                 {currentOfferPrice > 0 ? `${currentOfferPrice.toFixed(2)} KES` : 'Loading...'}
+                               </button>
                             </div>
                             <div className="flex justify-between text-xs sm:text-sm border-t border-gray-700 pt-3">
                                <span className="text-gray-400">Fees: <span className="text-white font-bold">Standard</span></span>
@@ -601,7 +737,9 @@ Should we proceed?`;
                                      <p className="text-xs text-gray-400">Secure Transfer</p>
                                   </div>
                                </div>
-                               <button className="px-3 sm:px-4 py-2 bg-white text-black text-xs sm:text-sm font-bold rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">Select</button>
+                               <button className="px-3 sm:px-4 py-2 bg-white text-black text-xs sm:text-sm font-bold rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                 {currentOfferPrice > 0 ? `${currentOfferPrice.toFixed(2)} KES` : 'Loading...'}
+                               </button>
                             </div>
                             <div className="flex justify-between text-xs sm:text-sm border-t border-gray-700 pt-3">
                                <span className="text-gray-400">Fees: <span className="text-white font-bold">Variable</span></span>
@@ -677,24 +815,6 @@ Should we proceed?`;
                </p>
              </div>
              
-             <div className="grid md:grid-cols-3 gap-6 sm:gap-8 text-left">
-                <div className="bg-gray-50 p-6 sm:p-8 rounded-3xl">
-                   <div className="p-3 bg-white rounded-xl w-fit mb-4 shadow-sm text-blue-600"><ShieldCheck size={28}/></div>
-                   <h3 className="font-bold text-xl mb-2">Verified Badge</h3>
-                   <p className="text-gray-500 text-sm sm:text-base">Stand out with the official verification badge and build instant trust with buyers.</p>
-                </div>
-                <div className="bg-gray-50 p-6 sm:p-8 rounded-3xl">
-                   <div className="p-3 bg-white rounded-xl w-fit mb-4 shadow-sm text-green-600"><TrendingUp size={28}/></div>
-                   <h3 className="font-bold text-xl mb-2">High Limits</h3>
-                   <p className="text-gray-500 text-sm sm:text-base">Access trading limits up to 10M KES per day with tailored fee structures.</p>
-                </div>
-                <div className="bg-gray-50 p-6 sm:p-8 rounded-3xl">
-                   <div className="p-3 bg-white rounded-xl w-fit mb-4 shadow-sm text-purple-600"><Users size={28}/></div>
-                   <h3 className="font-bold text-xl mb-2">Priority Support</h3>
-                   <p className="text-gray-500 text-sm sm:text-base">Direct access to our compliance and support team 24/7 via WhatsApp.</p>
-                </div>
-             </div>
-
              <div className="bg-black text-white rounded-3xl p-8 sm:p-12 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 <div className="relative z-10">
@@ -703,7 +823,7 @@ Should we proceed?`;
                      Contact our merchant onboarding team directly on WhatsApp to start your verification process.
                    </p>
                    <a 
-                     href="https://wa.me/254799830656" 
+                     href="https://wa.me/254799830656?text=I%20want%20to%20become%20a%20%23WekewaMerchant" 
                      target="_blank" 
                      rel="noopener noreferrer"
                      className="inline-flex items-center gap-3 px-6 sm:px-8 py-3 sm:py-4 bg-green-500 text-white rounded-full font-bold text-base sm:text-lg hover:bg-green-600 transition-transform hover:scale-105 shadow-lg shadow-green-900/20"
@@ -722,77 +842,112 @@ Should we proceed?`;
             <div className="text-center space-y-4">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-yellow-50 text-yellow-700 font-semibold text-xs uppercase tracking-wider mb-2">
                 <Gift size={14} className="animate-bounce" />
-                Invite & Earn Forever
+                Invite & Earn Crypto
               </div>
-              <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Refer Friends, Earn <span className="text-green-600">40%</span> Commission</h1>
+              <h1 className="text-3xl md:text-5xl font-bold tracking-tight">Give 21%, Get <span className="text-green-600">21%</span></h1>
               <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Share your unique link. When your friends trade WLD on Wekewa, you earn 40% of the platform revenue from their fees. Instantly.
+                Invite friends to trade on Wekewa. You both share 42% of the platform revenue from their <strong>first 3 trades</strong>.
               </p>
             </div>
 
-            {/* Dashboard Mock */}
-            <div className="grid md:grid-cols-3 gap-6">
-               <div className="bg-black text-white p-6 rounded-2xl flex flex-col justify-between h-40 shadow-xl">
-                 <div className="flex justify-between items-start opacity-80">
-                   <span className="text-sm font-medium">Total Earned</span>
-                   <Receipt size={20} />
-                 </div>
-                 <div>
-                   <span className="text-4xl font-bold tracking-tight">KES 12,450</span>
-                   <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                     <span className="text-green-400">+1,200</span> this week
-                   </div>
-                 </div>
+            {/* Link Generation Section */}
+            <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-xl max-w-2xl mx-auto">
+               <label className="block text-sm font-bold text-gray-800 mb-2">Your Name or Handle (Optional)</label>
+               <div className="relative mb-6">
+                 <input 
+                   type="text" 
+                   placeholder="e.g. Satoshi"
+                   value={referralId}
+                   onChange={(e) => setReferralId(e.target.value)}
+                   className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-black text-lg"
+                 />
+                 <span className="absolute right-4 top-4 text-gray-400">?ref={referralId || '...'}</span>
+               </div>
+
+               <p className="text-sm font-semibold text-gray-500 mb-4 uppercase tracking-wider">Share to Socials</p>
+               <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-3 sm:gap-4">
+                  <button onClick={() => handleSocialShare('whatsapp')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-green-50 text-green-600 hover:bg-green-100 transition-colors">
+                     <MessageCircle size={24}/>
+                     <span className="text-xs font-bold">WhatsApp</span>
+                  </button>
+                  <button onClick={() => handleSocialShare('twitter')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gray-50 text-black hover:bg-gray-100 transition-colors">
+                     <Twitter size={24}/>
+                     <span className="text-xs font-bold">X (Twitter)</span>
+                  </button>
+                   <button onClick={() => handleSocialShare('facebook')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
+                     <Facebook size={24}/>
+                     <span className="text-xs font-bold">Facebook</span>
+                  </button>
+                   <button onClick={() => handleSocialShare('telegram')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-sky-50 text-sky-500 hover:bg-sky-100 transition-colors">
+                     <Send size={24}/>
+                     <span className="text-xs font-bold">Telegram</span>
+                  </button>
+                   <button onClick={() => handleSocialShare('linkedin')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">
+                     <Linkedin size={24}/>
+                     <span className="text-xs font-bold">LinkedIn</span>
+                  </button>
+                   <button onClick={() => handleSocialShare('reddit')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors">
+                     <MessageSquare size={24}/>
+                     <span className="text-xs font-bold">Reddit</span>
+                  </button>
+                   <button onClick={() => handleSocialShare('email')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-purple-50 text-purple-600 hover:bg-purple-100 transition-colors">
+                     <Mail size={24}/>
+                     <span className="text-xs font-bold">Email</span>
+                  </button>
+                   <button onClick={() => handleSocialShare('sms')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-yellow-50 text-yellow-600 hover:bg-yellow-100 transition-colors">
+                     <Smartphone size={24}/>
+                     <span className="text-xs font-bold">SMS</span>
+                  </button>
+                   <button onClick={() => handleSocialShare('copy')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                     <Copy size={24}/>
+                     <span className="text-xs font-bold">Copy Link</span>
+                  </button>
+               </div>
+            </div>
+            
+            {/* Qualification Rules */}
+            <div className="grid md:grid-cols-2 gap-6">
+               <div className="bg-amber-50 border border-amber-100 rounded-2xl p-6">
+                  <h3 className="font-bold text-lg mb-2 flex items-center gap-2 text-amber-900">
+                     <AlertTriangle size={20}/>
+                     Qualification Rules
+                  </h3>
+                  <ul className="space-y-2 text-sm text-amber-900/80">
+                     <li className="flex items-start gap-2">
+                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                       <span>Referee must complete <strong>3 trades minimum</strong> to unlock rewards.</span>
+                     </li>
+                     <li className="flex items-start gap-2">
+                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                       <span>Rewards are valid for the <strong>first 3 trades only</strong>.</span>
+                     </li>
+                  </ul>
                </div>
                
-               <div className="bg-white border border-gray-200 p-6 rounded-2xl flex flex-col justify-between h-40">
-                 <div className="flex justify-between items-start text-gray-500">
-                   <span className="text-sm font-medium">Friends Referred</span>
-                   <Users size={20} />
-                 </div>
-                 <div>
-                   <span className="text-4xl font-bold tracking-tight text-gray-900">12</span>
-                   <div className="text-xs text-gray-500 mt-1">Active traders: 8</div>
-                 </div>
-               </div>
-
-               <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-2xl flex flex-col justify-between h-40 shadow-lg shadow-green-200">
-                 <div className="flex justify-between items-start opacity-90">
-                   <span className="text-sm font-medium">Next Payout</span>
-                   <Smartphone size={20} />
-                 </div>
-                 <div>
-                   <span className="text-4xl font-bold tracking-tight">KES 2,400</span>
-                   <div className="text-xs text-green-100 mt-1">Auto-pays to M-Pesa</div>
-                 </div>
+               <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6">
+                   <h3 className="font-bold text-lg mb-2 flex items-center gap-2 text-blue-900">
+                     <Zap size={20}/>
+                     Payout Structure
+                  </h3>
+                  <div className="space-y-3">
+                     <div className="flex justify-between items-center text-sm">
+                        <span className="text-blue-900/70">Eligibility</span>
+                        <span className="font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-xs">First 3 Trades</span>
+                     </div>
+                     <div className="flex justify-between items-center text-sm">
+                        <span className="text-blue-900/70">Payout Method</span>
+                        <span className="font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-xs">BTC Lightning</span>
+                     </div>
+                  </div>
                </div>
             </div>
 
-            {/* Link Section */}
-            <div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 text-center space-y-6">
-               <h3 className="text-xl font-bold">Your Unique Referral Link</h3>
-               <div className="flex flex-col sm:flex-row gap-3 max-w-xl mx-auto">
-                 <input 
-                   readOnly
-                   value="https://wekewa.com/invite/user123"
-                   className="flex-1 p-4 rounded-xl border border-gray-200 text-gray-600 font-medium focus:outline-none bg-white"
-                 />
-                 <button className="bg-black text-white px-8 py-4 rounded-xl font-bold hover:bg-gray-800 transition-all active:scale-95 flex items-center justify-center gap-2">
-                   <Copy size={18} />
-                   Copy Link
-                 </button>
-               </div>
-               <p className="text-sm text-gray-500">
-                 Share this link on WhatsApp, Twitter, or Telegram.
-               </p>
-            </div>
-
-            {/* Explanation of 40% */}
-            <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden">
+            {/* Explanation of 21% Split */}
+            <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden mt-8">
                <div className="p-8 border-b border-gray-100 bg-gray-50/50">
-                  <h3 className="text-xl font-bold mb-2">How the 40% Split Works</h3>
+                  <h3 className="text-xl font-bold mb-2">How the 21% / 21% Split Works</h3>
                   <p className="text-gray-600">
-                     We believe in sharing success. You get a massive 40% cut of the net revenue we generate from your referrals.
+                     Fairness first. The 42% revenue share is split equally between you and your friend.
                   </p>
                </div>
                <div className="p-8 grid md:grid-cols-2 gap-12 items-center">
@@ -817,16 +972,31 @@ Should we proceed?`;
                      </div>
                   </div>
 
-                  <div className="bg-black text-white p-8 rounded-2xl relative overflow-hidden text-center">
-                     <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                     <h4 className="text-gray-400 font-medium mb-2 uppercase text-xs tracking-widest">Your Earnings</h4>
-                     <div className="text-5xl font-bold mb-2 text-green-400">108 KES</div>
-                     <p className="text-sm opacity-80">
-                       You earn <span className="font-bold text-white">40%</span> of the <span className="font-bold text-white">270 KES</span> net revenue.
-                     </p>
-                     <div className="mt-6 pt-6 border-t border-white/10 text-xs text-gray-500">
-                        Paid out instantly to your connected M-Pesa.
+                  <div className="space-y-4">
+                      <div className="bg-black text-white p-6 rounded-2xl relative overflow-hidden flex justify-between items-center">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/30 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                        <div>
+                            <h4 className="text-gray-400 font-medium mb-1 uppercase text-[10px] tracking-widest">You Earn (21%)</h4>
+                            <div className="text-3xl font-bold text-green-400">56.7 KES</div>
+                        </div>
+                        <div className="text-right text-xs opacity-60">
+                            Paid to Referrer
+                        </div>
                      </div>
+                     
+                     <div className="bg-gray-100 text-black p-6 rounded-2xl relative overflow-hidden flex justify-between items-center border border-gray-200">
+                        <div>
+                            <h4 className="text-gray-500 font-medium mb-1 uppercase text-[10px] tracking-widest">Friend Earns (21%)</h4>
+                            <div className="text-3xl font-bold">56.7 KES</div>
+                        </div>
+                         <div className="text-right text-xs opacity-60">
+                            Paid to Referee
+                        </div>
+                     </div>
+                     
+                     <p className="text-center text-xs text-gray-400 pt-2">
+                        * Total Payout: 113.4 KES (42% of 270 KES Net Revenue). Paid in <strong>BTC Lightning</strong>.
+                     </p>
                   </div>
                </div>
             </div>
@@ -854,7 +1024,7 @@ Should we proceed?`;
                    </p>
                  </div>
                  <div className="text-left sm:text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-start items-center sm:items-end">
-                   <p className="text-xl sm:text-2xl font-bold">{selectedListing.price} {selectedListing.currency}</p>
+                   <p className="text-xl sm:text-2xl font-bold">{selectedListing.price.toFixed(2)} {selectedListing.currency}</p>
                    <p className="text-xs text-gray-400">per WLD</p>
                  </div>
                </div>
@@ -933,7 +1103,7 @@ Should we proceed?`;
 
                  <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">I will receive</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">I will receive (Net)</label>
                       <div className="relative">
                         <input 
                           type="text" 
@@ -943,9 +1113,9 @@ Should we proceed?`;
                         />
                         <span className="absolute right-4 top-3.5 sm:top-4 text-gray-400 font-medium">{selectedListing.currency}</span>
                       </div>
-                      <p className="text-xs text-gray-400 mt-2 text-right">Includes all fees</p>
+                      <p className="text-xs text-gray-400 mt-2 text-right">After platform & transfer fees</p>
 
-                      {/* Bank Specific Input */}
+                      {/* Dynamic Inputs based on Method */}
                       {isBank && (
                          <div className="mt-4 animate-in slide-in-from-top-2">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Bank Account Number</label>
@@ -958,31 +1128,87 @@ Should we proceed?`;
                             />
                          </div>
                       )}
+                      
+                      {isMpesa && (
+                         <div className="mt-4 animate-in slide-in-from-top-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">M-Pesa Phone or Till Number</label>
+                            <input 
+                               type="text"
+                               value={accountNumber}
+                               onChange={(e) => setAccountNumber(e.target.value)}
+                               placeholder="e.g. 0712345678 or 123456"
+                               className="w-full p-3 sm:p-4 bg-white rounded-xl border border-green-200 focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/10 transition-all font-mono text-base"
+                            />
+                         </div>
+                      )}
+
+                      {isBTC && (
+                         <div className="mt-4 animate-in slide-in-from-top-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Lightning Address (LNURL)</label>
+                            <input 
+                               type="text"
+                               value={accountNumber}
+                               onChange={(e) => setAccountNumber(e.target.value)}
+                               placeholder="e.g. user@blink.sv"
+                               className="w-full p-3 sm:p-4 bg-white rounded-xl border border-orange-200 focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all font-mono text-base"
+                            />
+                         </div>
+                      )}
                     </div>
                     
-                    {/* Bank Fee Tile */}
-                    {isBank && (
-                       <div className="bg-purple-50 p-3 sm:p-4 rounded-xl border border-purple-100 animate-in fade-in">
-                          <h4 className="font-semibold text-purple-900 mb-3 flex items-center gap-2 text-sm sm:text-base">
-                            <Info size={16}/> Bank Transfer Fees
+                    {/* Fee Tile - Only for Bank & M-Pesa */}
+                    {(isBank || isMpesa) && (
+                       <div className={`p-3 sm:p-4 rounded-xl border animate-in fade-in ${isMpesa ? 'bg-green-50 border-green-100' : 'bg-purple-50 border-purple-100'}`}>
+                          <h4 className={`font-semibold mb-3 flex items-center gap-2 text-sm sm:text-base ${isMpesa ? 'text-green-900' : 'text-purple-900'}`}>
+                            <Info size={16}/> Transaction Fees
                           </h4>
-                          <div className="space-y-2 text-xs">
+                          <div className="space-y-2 text-xs opacity-80">
                              <div className="flex justify-between"><span>0 - 99 KES</span> <span>0 KES</span></div>
                              <div className="flex justify-between"><span>100 - 999 KES</span> <span>13 KES</span></div>
                              <div className="flex justify-between"><span>1,000 - 9,999 KES</span> <span>90 KES</span></div>
                              <div className="flex justify-between"><span>10,000 - 99,999 KES</span> <span>108 KES</span></div>
+                             <div className="flex justify-between"><span>100,000+ KES</span> <span>108 KES</span></div>
                           </div>
-                          <div className="mt-3 pt-3 border-t border-purple-200 flex justify-between font-bold text-purple-900 text-sm">
+                          <div className={`mt-3 pt-3 border-t flex justify-between font-bold text-sm ${isMpesa ? 'border-green-200 text-green-900' : 'border-purple-200 text-purple-900'}`}>
                              <span>Applied Fee</span>
                              <span>-{fee} KES</span>
                           </div>
                        </div>
                     )}
 
+                    {/* BTC Education Section */}
+                    {isBTC && (
+                        <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 space-y-3">
+                            <h4 className="font-bold text-orange-900 text-sm flex items-center gap-2">
+                                <Zap size={16} className="text-orange-500 fill-orange-500"/>
+                                New to Bitcoin Lightning?
+                            </h4>
+                            <div className="space-y-3">
+                                <p className="text-xs text-orange-800">
+                                    Don't have a Lightning address? Create one instantly with these recommended wallets:
+                                </p>
+                                <div className="flex gap-2">
+                                    <a href="https://coinos.io" target="_blank" rel="noopener noreferrer" className="flex-1 bg-white border border-orange-200 rounded-lg p-2 text-xs font-medium text-center hover:bg-orange-50 hover:border-orange-300 transition-colors flex items-center justify-center gap-1">
+                                        <ExternalLink size={12}/> Coinos.io (Web)
+                                    </a>
+                                    <a href="https://blink.sv" target="_blank" rel="noopener noreferrer" className="flex-1 bg-white border border-orange-200 rounded-lg p-2 text-xs font-medium text-center hover:bg-orange-50 hover:border-orange-300 transition-colors flex items-center justify-center gap-1">
+                                        <ExternalLink size={12}/> Blink.sv (App)
+                                    </a>
+                                </div>
+                                <div className="border-t border-orange-200 pt-2 mt-2">
+                                    <a href="https://myfirstbitcoin.io" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs text-orange-700 font-semibold hover:underline">
+                                        <BookOpen size={14}/>
+                                        Study Bitcoin at MyFirstBitcoin.io
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="pt-4">
                       <button 
                         onClick={handleConfirmTrade}
-                        disabled={!wldAmount || parseFloat(wldAmount) <= 0 || (isBank && !accountNumber)}
+                        disabled={!wldAmount || parseFloat(wldAmount) <= 0 || !accountNumber}
                         className="w-full py-3 sm:py-4 bg-black text-white rounded-xl font-bold text-base sm:text-lg hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                       >
                         <MessageCircle size={20} />
@@ -1006,19 +1232,16 @@ Should we proceed?`;
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-50 border-t border-gray-200 mt-12 sm:mt-20 py-8 sm:py-12">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
-           <div className="flex items-center gap-2 opacity-50">
-              <Logo width={24} height={24} className="text-black sm:w-8 sm:h-8" />
-              <span className="font-semibold text-sm sm:text-base">Wekewa</span>
+      <footer className="bg-gray-50 border-t border-gray-200 mt-12 sm:mt-20 py-8">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col items-center gap-6">
+           <div className="flex gap-8 text-gray-500">
+              <a href="https://x.com/mutonganakamoto" target="_blank" className="hover:text-black hover:scale-110 transition-all" title="X (Twitter)"><Twitter size={24} /></a>
+              <a href="https://t.me/mutonganakamoto" target="_blank" className="hover:text-sky-500 hover:scale-110 transition-all" title="Telegram"><Send size={24} /></a>
+              <a href="https://instagram.com/mutonganakamoto" target="_blank" className="hover:text-pink-600 hover:scale-110 transition-all" title="Instagram"><Instagram size={24} /></a>
            </div>
-           <div className="text-xs sm:text-sm text-gray-400 text-center">
-             &copy; {new Date().getFullYear()} Wekewa Inc. All rights reserved.
-           </div>
-           <div className="flex gap-4 sm:gap-6 text-xs sm:text-sm text-gray-500">
-             <a href="#" className="hover:text-black">Terms</a>
-             <a href="#" className="hover:text-black">Privacy</a>
-             <a href="#" className="hover:text-black">Support</a>
+           
+           <div className="flex items-center gap-2 font-medium text-black">
+              Made in Kenya <span className="text-xl">🇰🇪</span>
            </div>
         </div>
       </footer>
@@ -1068,9 +1291,6 @@ Should we proceed?`;
           </div>
         </div>
       )}
-
-      {/* AI Assistant - Always Present */}
-      <AIAssistant />
     </div>
   );
 };

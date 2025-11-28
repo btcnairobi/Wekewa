@@ -4,7 +4,7 @@ import { Listing, MarketStat, MerchantProfile } from './types';
 export const TRADING_OPTIONS: Listing[] = [
   {
     id: 'opt_btc',
-    user: { name: 'Wekewa Official', verified: true, trades: 50000, completionRate: 100 },
+    user: { name: 'Wekewa Official', verified: true, trades: 2999, completionRate: 100 },
     type: 'buy',
     crypto: 'WLD',
     currency: 'KES',
@@ -15,7 +15,7 @@ export const TRADING_OPTIONS: Listing[] = [
   },
   {
     id: 'opt_mpesa',
-    user: { name: 'Wekewa Official', verified: true, trades: 50000, completionRate: 100 },
+    user: { name: 'Wekewa Official', verified: true, trades: 2999, completionRate: 100 },
     type: 'buy',
     crypto: 'WLD',
     currency: 'KES',
@@ -26,7 +26,7 @@ export const TRADING_OPTIONS: Listing[] = [
   },
   {
     id: 'opt_bank',
-    user: { name: 'Wekewa Official', verified: true, trades: 50000, completionRate: 100 },
+    user: { name: 'Wekewa Official', verified: true, trades: 2999, completionRate: 100 },
     type: 'buy',
     crypto: 'WLD',
     currency: 'KES',
@@ -86,7 +86,7 @@ export const MOCK_MERCHANTS: MerchantProfile[] = [
     name: 'Wekewa Official',
     verified: true,
     phone: 'Official Support',
-    stats: { trades: 50000, completionRate: 100 },
+    stats: { trades: 2999, completionRate: 100 },
     worldIdProfile: {
       username: '@wekewa',
       publicLink: 'world.id/wekewa',

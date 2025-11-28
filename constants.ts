@@ -1,83 +1,83 @@
 import { Listing, MarketStat, MerchantProfile } from './types';
 
-export const MOCK_LISTINGS: Listing[] = [
+// Trading Options acting as "Listings" for the unified merchant flow
+export const TRADING_OPTIONS: Listing[] = [
   {
-    id: '0',
+    id: 'opt_btc',
     user: { name: 'Wekewa Official', verified: true, trades: 50000, completionRate: 100 },
-    type: 'buy',
-    crypto: 'WLD',
-    currency: 'USD',
-    price: 4.90, // Premium price for official trading
-    minLimit: 10,
-    maxLimit: 1000000,
-    paymentMethods: ['World App', 'Bank Transfer', 'Wise', 'M-Pesa']
-  },
-  {
-    id: '1',
-    user: { name: 'CryptoBaron', verified: true, trades: 1240, completionRate: 99 },
-    type: 'sell',
-    crypto: 'WLD',
-    currency: 'USD',
-    price: 4.85,
-    minLimit: 50,
-    maxLimit: 2000,
-    paymentMethods: ['Bank Transfer', 'Wise']
-  },
-  {
-    id: '2',
-    user: { name: 'FastTrader_247', verified: true, trades: 450, completionRate: 95 },
-    type: 'sell',
-    crypto: 'WLD',
-    currency: 'USD',
-    price: 4.82,
-    minLimit: 10,
-    maxLimit: 500,
-    paymentMethods: ['PayPal', 'Revolut']
-  },
-  {
-    id: '3',
-    user: { name: 'WLD_Whale', verified: false, trades: 45, completionRate: 88 },
-    type: 'buy',
-    crypto: 'WLD',
-    currency: 'USD',
-    price: 4.75,
-    minLimit: 100,
-    maxLimit: 5000,
-    paymentMethods: ['Bank Transfer']
-  },
-  {
-    id: '4',
-    user: { name: 'KenyaConnect', verified: true, trades: 3300, completionRate: 99.5 },
-    type: 'sell',
-    crypto: 'WLD',
-    currency: 'KES',
-    price: 650, // Approx KES price
-    minLimit: 1000,
-    maxLimit: 50000,
-    paymentMethods: ['M-Pesa']
-  },
-  {
-    id: '5',
-    user: { name: 'EuroStash', verified: true, trades: 89, completionRate: 100 },
-    type: 'buy',
-    crypto: 'WLD',
-    currency: 'EUR',
-    price: 4.40,
-    minLimit: 20,
-    maxLimit: 1000,
-    paymentMethods: ['SEPA']
-  },
-  {
-    id: '6',
-    user: { name: 'MutongaB2B', verified: true, trades: 850, completionRate: 98 },
     type: 'buy',
     crypto: 'WLD',
     currency: 'KES',
     price: 660, 
-    minLimit: 500,
+    minLimit: 10,
     maxLimit: 100000,
-    paymentMethods: ['M-Pesa', 'Bank Transfer']
+    paymentMethods: ['BTC Lightning']
+  },
+  {
+    id: 'opt_mpesa',
+    user: { name: 'Wekewa Official', verified: true, trades: 50000, completionRate: 100 },
+    type: 'buy',
+    crypto: 'WLD',
+    currency: 'KES',
+    price: 660, 
+    minLimit: 10,
+    maxLimit: 100000,
+    paymentMethods: ['M-Pesa']
+  },
+  {
+    id: 'opt_bank',
+    user: { name: 'Wekewa Official', verified: true, trades: 50000, completionRate: 100 },
+    type: 'buy',
+    crypto: 'WLD',
+    currency: 'KES',
+    price: 660, 
+    minLimit: 10,
+    maxLimit: 100000,
+    paymentMethods: ['Bank Transfer']
   }
+];
+
+export const SUPPORTED_BANKS = [
+  "Family Bank Ltd",
+  "Bank of Africa (BOA)",
+  "Faulu DTM",
+  "Kingdom Bank",
+  "Imperial Bank Ltd",
+  "Musoni",
+  "KWFT DTM",
+  "Rafiki DTM",
+  "Branch Microfinance Bank",
+  "Uwezo DTM",
+  "Credit Bank",
+  "Citibank N.A Kenya",
+  "Vision Fund Kenya",
+  "NCBA",
+  "Diamond Trust Bank (DTB)",
+  "GTBank Kenya Ltd",
+  "SBM Bank",
+  "Equity Bank",
+  "ABC Bank",
+  "Stanbic Bank",
+  "Housing Finance Company Ltd",
+  "Consolidated Bank Ltd",
+  "Caritas MFB",
+  "Premier Bank",
+  "Ecobank",
+  "Sidian Bank",
+  "Co-operative Bank",
+  "Standard Chartered Bank",
+  "ABSA",
+  "Spire Bank",
+  "SMEP DTM",
+  "KCB",
+  "Century Microfinance",
+  "I&M Bank Limited",
+  "Access Bank Kenya",
+  "Gulf African Bank",
+  "National Bank",
+  "Prime Bank",
+  "UBA Bank",
+  "Post Office Savings Bank"
 ];
 
 export const MOCK_MERCHANTS: MerchantProfile[] = [
@@ -92,14 +92,7 @@ export const MOCK_MERCHANTS: MerchantProfile[] = [
       publicLink: 'world.id/wekewa',
       ens: 'wekewa.world.id',
       verificationDate: '18/03/2022'
-    }
-  },
-  {
-    id: 'm1',
-    name: 'MutongaB2B',
-    verified: true,
-    phone: '+254799830656',
-    stats: { trades: 850, completionRate: 98 },
+    },
     depositAddress: '0x5e7ef40b29147e856a3615bbef78140f5d19844e',
     networks: [
       {
@@ -139,3 +132,5 @@ export const MOCK_CHART_DATA: MarketStat[] = [
   { time: '20:00', price: 4.78 },
   { time: '24:00', price: 4.82 },
 ];
+
+export const MOCK_LISTINGS: Listing[] = []; // Empty as we removed marketplace

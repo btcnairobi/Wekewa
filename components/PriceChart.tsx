@@ -4,56 +4,100 @@ import { MarketStat } from '../types';
 
 interface PriceChartProps {
   data: MarketStat[];
+  currentPrice: number;
+  priceChange: number;
+  selectedRange: string;
+  onRangeChange: (range: string) => void;
+  isLoading?: boolean;
 }
 
-const PriceChart: React.FC<PriceChartProps> = ({ data }) => {
+const RANGES = ['1H', '1D', '1W', '1M', '1Y'];
+
+const PriceChart: React.FC<PriceChartProps> = ({ 
+  data, 
+  currentPrice, 
+  priceChange, 
+  selectedRange, 
+  onRangeChange,
+  isLoading = false
+}) => {
+  const isPositive = priceChange >= 0;
+
   return (
-    <div className="h-64 w-full bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-      <div className="flex justify-between items-center mb-4">
+    <div className="h-72 sm:h-80 w-full bg-white rounded-xl border border-gray-100 p-3 sm:p-4 shadow-sm flex flex-col">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-0">
         <div>
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">WLD/USD Price</h3>
-            <p className="text-2xl font-bold text-gray-900">$4.82 <span className="text-green-500 text-sm font-medium ml-2">+2.4%</span></p>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">WLD/USD Price</h3>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              </p>
+              <span className={`text-sm font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+              </span>
+            </div>
         </div>
-        <div className="flex space-x-2">
-            <span className="px-2 py-1 text-xs font-medium bg-gray-100 rounded text-gray-600 cursor-pointer">1H</span>
-            <span className="px-2 py-1 text-xs font-medium bg-black text-white rounded cursor-pointer">24H</span>
-            <span className="px-2 py-1 text-xs font-medium bg-gray-100 rounded text-gray-600 cursor-pointer">1W</span>
+        <div className="flex bg-gray-100 p-1 rounded-lg w-full sm:w-auto overflow-x-auto no-scrollbar">
+            {RANGES.map(range => (
+              <button
+                key={range}
+                onClick={() => onRangeChange(range)}
+                className={`flex-1 sm:flex-none px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                  selectedRange === range 
+                    ? 'bg-white text-black shadow-sm' 
+                    : 'text-gray-500 hover:text-black'
+                }`}
+              >
+                {range}
+              </button>
+            ))}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height="75%">
-        <AreaChart data={data}>
-          <defs>
-            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#000000" stopOpacity={0.1}/>
-              <stop offset="95%" stopColor="#000000" stopOpacity={0}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-          <XAxis 
-            dataKey="time" 
-            axisLine={false} 
-            tickLine={false} 
-            tick={{fontSize: 12, fill: '#9ca3af'}} 
-            dy={10}
-          />
-          <YAxis 
-            hide={true} 
-            domain={['dataMin - 0.1', 'dataMax + 0.1']} 
-          />
-          <Tooltip 
-            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-            itemStyle={{ color: '#000' }}
-          />
-          <Area 
-            type="monotone" 
-            dataKey="price" 
-            stroke="#000000" 
-            strokeWidth={2}
-            fillOpacity={1} 
-            fill="url(#colorPrice)" 
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+      
+      <div className="flex-1 w-full min-h-0 relative">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data}>
+            <defs>
+              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0.1}/>
+                <stop offset="95%" stopColor={isPositive ? "#22c55e" : "#ef4444"} stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+            <XAxis 
+              dataKey="time" 
+              axisLine={false} 
+              tickLine={false} 
+              tick={{fontSize: 10, fill: '#9ca3af'}} 
+              dy={10}
+              minTickGap={30}
+            />
+            <YAxis 
+              hide={true} 
+              domain={['dataMin', 'dataMax']} 
+            />
+            <Tooltip 
+              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+              itemStyle={{ color: '#000', fontWeight: 'bold' }}
+              formatter={(value: number) => [`$${value.toFixed(4)}`, 'Price']}
+            />
+            <Area 
+              type="monotone" 
+              dataKey="price" 
+              stroke={isPositive ? "#22c55e" : "#ef4444"} 
+              strokeWidth={2}
+              fillOpacity={1} 
+              fill="url(#colorPrice)" 
+              animationDuration={1000}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 };
